@@ -1,3 +1,4 @@
 flask
+flask-cors
 searoute
-python-dotenv  # Optional, if you load .env
+gunicorn
