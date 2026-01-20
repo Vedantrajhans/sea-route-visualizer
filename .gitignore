@@ -1,0 +1,42 @@
+# Python / Virtual Environment
+venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+pip-delete-this-directory.txt
+
+# Environment variables (CRITICAL - never commit API keys!)
+.env
+.env.local
+.env.production
+
+# Flask / Server
+instance/
+.webassets-cache
+.flask_session/
+
+# IDE / Editor files
+.idea/
+.vscode/
+*.sublime-workspace
+*.sublime-project
+
+# OS / System files
+.DS_Store
+Thumbs.db
+
+# Logs and databases
+*.log
+*.sqlite3
+
+# Node / Frontend (if you add any later)
+node_modules/
+dist/
+build/
+
+# Other
+*.bak
+*.tmp
