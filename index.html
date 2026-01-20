@@ -276,7 +276,7 @@
       const MAPBOX_TOKEN =
         "pk.eyJ1IjoidmVkYW50cmFqaGFucyIsImEiOiJjbWdtZTN6OWkxYzc2MmxzZ2JvOWI4YWxxIn0.d1gM0C5MHs0gQ2TfHj2o0Q";
       const OWM_KEY = "99a7d00880dbdf5fe9668693ab588b9d";
-      const SERVER_URL = "http://localhost:5000/get_route";
+      const SERVER_URL = "/get_route";
       const PORTS_DATA_URL =
         "https://raw.githubusercontent.com/tayljordan/ports/main/ports.json";
 
@@ -589,7 +589,7 @@
         } catch (err) {
           console.error("❌ Route calculation error:", err);
           alert(
-            "❌ Failed to calculate route. Please ensure the Python backend (server.py) is running on port 5000.",
+            "❌ Failed to calculate route. Please try again or refresh the page.",
           );
         } finally {
           btn.innerHTML = originalText;
