@@ -1,0 +1,535 @@
+<!-- templates/index.html -->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>India Logistics Tracker</title>
+
+    <link
+      href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css"
+      rel="stylesheet"
+    />
+    <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+      body {
+        margin: 0;
+        background: #020617;
+        color: white;
+        font-family: "Inter", sans-serif;
+        overflow: hidden;
+      }
+      #map {
+        position: absolute;
+        inset: 0;
+        width: 100vw;
+        height: 100vh;
+      }
+
+      /* --- Sidebar UI --- */
+      .sidebar {
+        position: absolute;
+        top: 20px;
+        left: 20px;
+        width: 340px;
+        z-index: 50;
+      }
+      .card {
+        background: rgba(15, 23, 42, 0.9);
+        backdrop-filter: blur(12px);
+        border-radius: 16px;
+        border: 1px solid rgba(59, 130, 246, 0.3);
+        padding: 24px;
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+      }
+
+      .port-input {
+        width: 100%;
+        background: #1e293b;
+        color: white;
+        padding: 12px;
+        border: 1px solid #475569;
+        border-radius: 8px;
+        margin-top: 8px;
+        outline: none;
+        transition: all 0.3s;
+      }
+      .port-input:focus {
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+      }
+
+      /* --- Ship Marker --- */
+      .ship-marker {
+        width: 60px;
+        height: 60px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        will-change: transform;
+        z-index: 40;
+      }
+
+      .ship-icon {
+        font-size: 45px;
+        display: block;
+        transform-origin: center center;
+        filter: drop-shadow(0 5px 10px rgba(0, 0, 0, 0.8));
+      }
+
+      /* --- Start & End Markers --- */
+      .marker-container {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+      }
+
+      .start-point {
+        width: 20px;
+        height: 20px;
+        background: #22c55e;
+        border: 3px solid white;
+        border-radius: 50%;
+        box-shadow: 0 0 20px rgba(34, 197, 94, 1);
+        z-index: 45;
+      }
+
+      .end-point {
+        width: 24px;
+        height: 24px;
+        background: #ef4444;
+        border: 3px solid white;
+        border-radius: 50%;
+        box-shadow: 0 0 25px rgba(239, 68, 68, 1);
+        animation: pulse-red 1.5s infinite;
+        z-index: 45;
+      }
+
+      @keyframes pulse-red {
+        0% {
+          transform: scale(1);
+          box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+        }
+        70% {
+          transform: scale(1.2);
+          box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+        }
+        100% {
+          transform: scale(1);
+          box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+        }
+      }
+
+      /* --- Popups --- */
+      .mapboxgl-popup {
+        z-index: 100 !important;
+      }
+      .mapboxgl-popup-content {
+        background: #0f172a !important;
+        color: white !important;
+        border-radius: 12px;
+        padding: 16px;
+        border: 1px solid #3b82f6;
+        min-width: 260px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.9);
+      }
+      .mapboxgl-popup-tip {
+        border-top-color: #3b82f6 !important;
+      }
+
+      .popup-header {
+        color: #60a5fa;
+        font-weight: 800;
+        border-bottom: 1px solid #334155;
+        padding-bottom: 8px;
+        margin-bottom: 10px;
+        font-size: 14px;
+        text-transform: uppercase;
+      }
+      .info-row {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 6px;
+        align-items: center;
+      }
+      .info-label {
+        color: #94a3b8;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+      }
+      .info-value {
+        color: #f8fafc;
+        font-weight: 600;
+        font-size: 13px;
+        text-align: right;
+      }
+
+      /* Responsive for mobile */
+      @media (max-width: 768px) {
+        .sidebar {
+          left: 20px;
+          right: 20px;
+          width: auto;
+        }
+        .card {
+          padding: 16px;
+        }
+        .port-input {
+          padding: 12px 10px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="map"></div>
+
+    <div class="sidebar">
+      <div class="card">
+        <h1 class="text-xl font-bold mb-4 flex items-center gap-2 text-white">
+          <span class="text-2xl">🌍</span> Global Logistics
+        </h1>
+
+        <div class="mb-5">
+          <label
+            class="text-xs text-blue-400 font-bold uppercase tracking-widest block mb-1"
+          >
+            Destination Port
+          </label>
+          <input
+            list="dest-list"
+            id="dest-input"
+            class="port-input"
+            placeholder="Select destination..."
+          />
+          <datalist id="dest-list"></datalist>
+        </div>
+
+        <button
+          onclick="launchShipment()"
+          id="launch-btn"
+          class="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 py-3 rounded-lg font-bold text-white transition-all shadow-lg shadow-blue-900/40 active:scale-95 flex justify-center items-center gap-2 mb-3"
+        >
+          <span>🚢</span> Dispatch Vessel
+        </button>
+
+        <button
+          onclick="showDestinationDetails()"
+          id="details-btn"
+          class="hidden w-full border border-slate-600 bg-slate-800/50 hover:bg-slate-700 py-2 rounded-lg text-sm font-semibold text-slate-200 transition-all flex justify-center items-center gap-2"
+        >
+          <span>📍</span>
+          <span id="details-btn-text">Show Arrival Details</span>
+        </button>
+      </div>
+    </div>
+
+    <script>
+      // --- CONFIGURATION ---
+      const MAPBOX_TOKEN = "{{ mapbox_token }}";
+      const OWM_KEY = "{{ owm_key }}";
+      const SERVER_URL = "/get_route";
+
+      const INDIA_COORD = [72.9642, 18.9499]; // Nhava Sheva
+      const DESTINATIONS = {
+        "Dubai (UAE)": [55.0273, 25.0657],
+        "New York (USA)": [-74.006, 40.7128],
+        "London Gateway (UK)": [0.4552, 51.5126],
+        "Shanghai (China)": [121.4737, 31.2304],
+        "Sydney (Australia)": [151.2093, -33.8688],
+        "Cape Town (South Africa)": [18.4241, -33.9249],
+        "Rotterdam (Netherlands)": [4.47917, 51.9225],
+      };
+
+      // --- MAP SETUP ---
+      mapboxgl.accessToken = MAPBOX_TOKEN;
+      const map = new mapboxgl.Map({
+        container: "map",
+        style: "mapbox://styles/mapbox/dark-v11",
+        center: [20, 20],
+        zoom: 1.5,
+        projection: "globe",
+      });
+
+      let shipMarker = null;
+      let startMarker = null;
+      let endMarker = null;
+      let endPopup = null;
+      let animationId = null;
+      let currentDestination = null;
+      let detailsVisible = false;
+
+      map.on("style.load", () => {
+        map.setFog({
+          range: [0.5, 10],
+          color: "#0f172a",
+          "horizon-blend": 0.1,
+          "star-intensity": 0.6,
+        });
+
+        const dl = document.getElementById("dest-list");
+        Object.keys(DESTINATIONS).forEach((k) => {
+          const o = document.createElement("option");
+          o.value = k;
+          dl.appendChild(o);
+        });
+
+        const startEl = document.createElement("div");
+        startEl.className = "marker-container";
+        startEl.innerHTML = `<div class="start-point"></div>`;
+
+        startMarker = new mapboxgl.Marker({ element: startEl })
+          .setLngLat(INDIA_COORD)
+          .addTo(map);
+
+        const startPopup = new mapboxgl.Popup({
+          offset: 25,
+          closeButton: false,
+        }).setText("Origin: Nhava Sheva Port, India");
+
+        startEl.addEventListener("mouseenter", () =>
+          startPopup.setLngLat(INDIA_COORD).addTo(map),
+        );
+        startEl.addEventListener("mouseleave", () => startPopup.remove());
+      });
+
+      // --- MAIN LOGIC (unchanged from your original) ---
+      async function launchShipment() {
+        const destKey = document.getElementById("dest-input").value;
+        const destCoord = DESTINATIONS[destKey];
+
+        if (!destCoord) {
+          alert("Please select a valid destination from the list.");
+          return;
+        }
+
+        currentDestination = destCoord;
+        detailsVisible = false;
+        document.getElementById("details-btn-text").innerText =
+          "Show Arrival Details";
+        document.getElementById("details-btn").classList.add("hidden");
+
+        const btn = document.getElementById("launch-btn");
+        const originalText = btn.innerHTML;
+        btn.innerHTML = `<span class="animate-spin">⚙️</span> Calculating Route...`;
+        btn.disabled = true;
+
+        try {
+          const res = await axios.post(SERVER_URL, {
+            origin: INDIA_COORD,
+            dest: destCoord,
+          });
+
+          const routeGeoJSON = res.data.geometry;
+          const coords = routeGeoJSON.coordinates;
+          const distNM = Math.round(res.data.distance);
+          const transitDays = Math.max(1, Math.ceil(distNM / 480));
+
+          const startDate = new Date();
+          const arrivalDate = new Date();
+          arrivalDate.setDate(startDate.getDate() + transitDays);
+
+          const cargoCount = Math.floor(Math.random() * (23 - 15 + 1)) + 15;
+
+          const weather = await fetchWeather(destCoord[1], destCoord[0]);
+
+          drawRoute(routeGeoJSON);
+
+          setupDestinationMarker(destKey, destCoord, {
+            dist: distNM,
+            days: transitDays,
+            start: startDate,
+            end: arrivalDate,
+            cargo: cargoCount,
+            weather: weather,
+          });
+
+          document.getElementById("details-btn").classList.remove("hidden");
+
+          const animDuration = Math.min(30000, Math.max(10000, distNM * 5));
+          startShipAnimation(coords, animDuration);
+
+          const bounds = new mapboxgl.LngLatBounds();
+          coords.forEach((c) => bounds.extend(c));
+          map.fitBounds(bounds, { padding: 100, pitch: 30, duration: 2000 });
+        } catch (e) {
+          console.error(e);
+          alert("Error: Could not fetch sea route.");
+        } finally {
+          btn.innerHTML = originalText;
+          btn.disabled = false;
+        }
+      }
+
+      function showDestinationDetails() {
+        if (!endPopup || !currentDestination) return;
+        const btnText = document.getElementById("details-btn-text");
+
+        if (!detailsVisible) {
+          map.flyTo({
+            center: currentDestination,
+            zoom: 4,
+            essential: true,
+            speed: 1.5,
+          });
+          endPopup.setLngLat(currentDestination).addTo(map);
+          btnText.innerText = "Hide Arrival Details";
+          detailsVisible = true;
+        } else {
+          endPopup.remove();
+          btnText.innerText = "Show Arrival Details";
+          detailsVisible = false;
+        }
+      }
+
+      async function fetchWeather(lat, lon) {
+        try {
+          const res = await axios.get(
+            `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&units=metric&appid=${OWM_KEY}`,
+          );
+          return `${Math.round(res.data.main.temp)}°C, ${res.data.weather[0].main}`;
+        } catch {
+          return "Data unavailable";
+        }
+      }
+
+      function drawRoute(geojson) {
+        if (map.getSource("route")) {
+          map.getSource("route").setData(geojson);
+        } else {
+          map.addSource("route", { type: "geojson", data: geojson });
+          map.addLayer({
+            id: "route-line",
+            type: "line",
+            source: "route",
+            layout: { "line-join": "round", "line-cap": "round" },
+            paint: {
+              "line-color": "#3b82f6",
+              "line-width": 4,
+              "line-opacity": 0.8,
+              "line-dasharray": [1, 2],
+            },
+          });
+
+          map.addLayer(
+            {
+              id: "route-glow",
+              type: "line",
+              source: "route",
+              layout: { "line-join": "round", "line-cap": "round" },
+              paint: {
+                "line-color": "#60a5fa",
+                "line-width": 10,
+                "line-opacity": 0.2,
+                "line-blur": 8,
+              },
+            },
+            "route-line",
+          );
+        }
+      }
+
+      function setupDestinationMarker(name, coords, data) {
+        if (endMarker) endMarker.remove();
+        if (endPopup) endPopup.remove();
+
+        const el = document.createElement("div");
+        el.className = "marker-container";
+        el.innerHTML = `<div class="end-point"></div>`;
+
+        const popupContent = `
+          <div class="popup-header">${name}</div>
+          <div class="info-row"><span class="info-label">Where it came from</span><span class="info-value">India 🇮🇳</span></div>
+          <div class="info-row"><span class="info-label">Traveling days</span><span class="info-value">${data.days} Days</span></div>
+          <div class="info-row"><span class="info-label">No. of Cargo</span><span class="info-value">${data.cargo}</span></div>
+          <div class="info-row"><span class="info-label">Weather there</span><span class="info-value">${data.weather}</span></div>
+          <div class="info-row"><span class="info-label">Started at</span><span class="info-value">${data.start.toLocaleDateString()}</span></div>
+          <div class="info-row"><span class="info-label">Reaches at</span><span class="info-value">${data.end.toLocaleDateString()}</span></div>
+        `;
+
+        endPopup = new mapboxgl.Popup({
+          offset: 35,
+          closeButton: true,
+          closeOnClick: false,
+        }).setHTML(popupContent);
+
+        endPopup.on("close", () => {
+          detailsVisible = false;
+          document.getElementById("details-btn-text").innerText =
+            "Show Arrival Details";
+        });
+
+        endMarker = new mapboxgl.Marker({ element: el })
+          .setLngLat(coords)
+          .addTo(map);
+
+        el.addEventListener("mouseenter", () => {
+          if (!detailsVisible) endPopup.setLngLat(coords).addTo(map);
+        });
+      }
+
+      function startShipAnimation(path, duration) {
+        if (shipMarker) shipMarker.remove();
+        if (animationId) cancelAnimationFrame(animationId);
+
+        const el = document.createElement("div");
+        el.className = "ship-marker";
+
+        const icon = document.createElement("div");
+        icon.className = "ship-icon";
+        icon.innerText = "🚢";
+        el.appendChild(icon);
+
+        shipMarker = new mapboxgl.Marker({
+          element: el,
+          rotationAlignment: "map",
+          pitchAlignment: "map",
+        })
+          .setLngLat(path[0])
+          .addTo(map);
+
+        let startTime;
+
+        function step(timestamp) {
+          if (!startTime) startTime = timestamp;
+          const progress = (timestamp - startTime) / duration;
+
+          if (progress >= 1) {
+            shipMarker.setLngLat(path[path.length - 1]);
+            return;
+          }
+
+          const totalPoints = path.length - 1;
+          const exactIndex = progress * totalPoints;
+          const index = Math.floor(exactIndex);
+          const nextIndex = Math.min(index + 1, totalPoints);
+          const indexProgress = exactIndex - index;
+
+          const p1 = path[index];
+          const p2 = path[nextIndex];
+
+          const lng = p1[0] + (p2[0] - p1[0]) * indexProgress;
+          const lat = p1[1] + (p2[1] - p1[1]) * indexProgress;
+
+          shipMarker.setLngLat([lng, lat]);
+
+          if (p1[0] !== p2[0] || p1[1] !== p2[1]) {
+            const bearing = turf.bearing(turf.point(p1), turf.point(p2));
+            icon.style.transform = `rotate(${bearing}deg)`;
+          }
+
+          animationId = requestAnimationFrame(step);
+        }
+
+        animationId = requestAnimationFrame(step);
+      }
+    </script>
+  </body>
+</html>

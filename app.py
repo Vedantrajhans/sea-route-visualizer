@@ -1,63 +1,47 @@
+# app.py
 import traceback
-from flask import Flask, request, jsonify, send_from_directory
-from flask_cors import CORS
-import searoute as sr
+from flask import Flask, request, jsonify, render_template
 import os
+from dotenv import load_dotenv
+import searoute as sr
 
-app = Flask(__name__, static_folder="public", static_url_path="")
-CORS(app)  # optional, good for dev
+load_dotenv()  # For local .env file
 
-# Serve frontend
-@app.route("/")
+app = Flask(__name__)
+
+@app.route('/')
 def index():
-    return send_from_directory("public", "index.html")
+    return render_template('index.html',
+                           mapbox_token=os.getenv('MAPBOX_TOKEN'),
+                           owm_key=os.getenv('OWM_KEY'))
 
-# Health check
-@app.route("/health")
-def health():
-    return jsonify({"status": "ok"})
-
-# Calculate sea route
-@app.route("/get_route", methods=["POST"])
+@app.route('/get_route', methods=['POST'])
 def get_route():
     try:
         data = request.json
-        origin = data.get("origin")
-        dest = data.get("dest")
+        origin = data.get('origin')
+        dest = data.get('dest')
 
         if not origin or not dest:
-            return jsonify({"error": "Missing origin or destination"}), 400
+            return jsonify({"error": "Missing coordinates"}), 400
 
-        def valid(c):
-            return (
-                isinstance(c, list)
-                and len(c) == 2
-                and isinstance(c[0], (int, float))
-                and isinstance(c[1], (int, float))
-                and -180 <= c[0] <= 180
-                and -90 <= c[1] <= 90
-            )
+        route_geojson = sr.searoute(origin, dest, units="naut")
 
-        if not valid(origin) or not valid(dest):
-            return jsonify({"error": "Invalid coordinates"}), 400
-
-        route = sr.searoute(origin, dest, units="nm")
-
-        if not route or not route.get("geometry"):
-            return jsonify({"error": "No maritime route found"}), 422
-
-        distance = route.get("properties", {}).get("length", 0)
+        geometry = route_geojson['geometry']
+        properties = route_geojson['properties']
+        distance = properties.get('length', 0)
 
         return jsonify({
-            "geometry": route["geometry"],
-            "distance": round(distance, 1),
+            "geometry": geometry,
+            "distance": distance,
             "units": "nautical miles"
         })
 
-    except Exception:
-        print(traceback.format_exc())
-        return jsonify({"error": "Server error"}), 500
+    except Exception as e:
+        print("Server Error:")
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
 
-# Optional local testing
-if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=5000)
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=True)
