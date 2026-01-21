@@ -1,4 +1,5 @@
 # requirements.txt
 flask
+gunicorn
 searoute
 python-dotenv
